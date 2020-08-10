@@ -25,7 +25,6 @@ import com.dtstack.flinkx.util.ClassUtil;
 import com.dtstack.flinkx.util.ExceptionUtil;
 import com.dtstack.flinkx.util.SysUtil;
 import com.dtstack.flinkx.util.TelnetUtil;
-import com.google.gson.Gson;
 import org.apache.commons.lang.StringUtils;
 import org.apache.flink.util.CollectionUtil;
 import org.slf4j.Logger;
@@ -101,6 +100,7 @@ public class DbUtil {
      * @throws SQLException
      */
     private static Connection getConnectionInternal(String url, String username, String password) throws SQLException {
+        LOG.info("url:" + url);
         Connection dbConn;
         synchronized (ClassUtil.LOCK_STR) {
             DriverManager.setLoginTimeout(10);
@@ -283,11 +283,12 @@ public class DbUtil {
      * @param password          数据库密码
      * @param databaseInterface DatabaseInterface
      * @param table             表名
-     * @param metaColumns    MetaColumn列表
-     * @return 字段类型list列表
+     * @param metaColumns       MetaColumn列表
+     * @return
      */
-    public static List<String> analyzeTable(String dbUrl, String username, String password, DatabaseInterface databaseInterface, String table, List<MetaColumn> metaColumns) {
-        List<String> descColumnTypeList = new ArrayList<>(metaColumns.size());
+    public static List<String> analyzeTable(String dbUrl, String username, String password, DatabaseInterface databaseInterface,
+                                            String table, List<MetaColumn> metaColumns) {
+        List<String> ret = new ArrayList<>(metaColumns.size());
         Connection dbConn = null;
         Statement stmt = null;
         ResultSet rs = null;
@@ -297,32 +298,25 @@ public class DbUtil {
             rs = stmt.executeQuery(databaseInterface.getSqlQueryFields(databaseInterface.quoteTable(table)));
             ResultSetMetaData rd = rs.getMetaData();
 
-            boolean flag = ConstantValue.STAR_SYMBOL.equals(metaColumns.get(0).getName());
             Map<String, String> nameTypeMap = new HashMap<>((rd.getColumnCount() << 2) / 3);
-            for (int i = 1; i <= rd.getColumnCount(); i++) {
-                if(flag){
-                    descColumnTypeList.add(rd.getColumnTypeName(i));
-                }else{
-                    nameTypeMap.put(rd.getColumnName(i), rd.getColumnTypeName(i));
-                }
+            for (int i = 0; i < rd.getColumnCount(); ++i) {
+                nameTypeMap.put(rd.getColumnName(i + 1), rd.getColumnTypeName(i + 1));
             }
-            if(!flag){
-                for (MetaColumn metaColumn : metaColumns) {
-                    if (metaColumn.getValue() != null) {
-                        descColumnTypeList.add("string");
-                    } else {
-                        descColumnTypeList.add(nameTypeMap.get(metaColumn.getName()));
-                    }
+
+            for (MetaColumn metaColumn : metaColumns) {
+                if (metaColumn.getValue() != null) {
+                    ret.add("string");
+                } else {
+                    ret.add(nameTypeMap.get(metaColumn.getName()));
                 }
             }
         } catch (SQLException e) {
-            LOG.error("error to analyzeTable, dbUrl =  {}, table = {}, metaColumns = {}, e = {}", dbUrl, table, new Gson().toJson(metaColumns), ExceptionUtil.getErrorMessage(e));
             throw new RuntimeException(e);
         } finally {
             closeDbResources(rs, stmt, dbConn, false);
         }
 
-        return descColumnTypeList;
+        return ret;
     }
 
     /**
@@ -460,7 +454,22 @@ public class DbUtil {
      * @return 格式化后jdbc连接URL字符串
      */
     public static String formatJdbcUrl(String dbUrl, Map<String, String> extParamMap) {
-        String[] splits = DB_PATTERN.split(dbUrl);
+        StringBuilder sshjUrl = new StringBuilder();
+        String jdbcSourceUrl = dbUrl;
+        if (dbUrl.contains("jdbc:sshj:") || dbUrl.contains("jdbc:sshj-native:")) {
+            String[] split = dbUrl.split(";;;");
+            if (split.length < 2) {
+                throw new IllegalArgumentException("JDBC sshj Args not target jdbc url" + dbUrl);
+            }else{
+                for (int i = 0; i <= split.length - 2; i++) {
+                    sshjUrl.append(split[i]);
+                    sshjUrl.append(";;;");
+                }
+                jdbcSourceUrl = split[split.length - 1];
+            }
+        }
+
+        String[] splits = DB_PATTERN.split(jdbcSourceUrl);
 
         Map<String, String> paramMap = new HashMap<>(16);
         if (splits.length > 1) {
@@ -476,8 +485,7 @@ public class DbUtil {
         }
         paramMap.put("useCursorFetch", "true");
         paramMap.put("rewriteBatchedStatements", "true");
-
-        StringBuffer sb = new StringBuffer(dbUrl.length() + 128);
+        StringBuffer sb = new StringBuffer(jdbcSourceUrl.length() + 128);
         sb.append(splits[0]).append("?");
         int index = 0;
         for (Map.Entry<String, String> entry : paramMap.entrySet()) {
@@ -487,7 +495,7 @@ public class DbUtil {
             sb.append(entry.getKey()).append("=").append(entry.getValue());
             index++;
         }
-
-        return sb.toString();
+        sshjUrl.append(sb.toString());
+        return sshjUrl.toString();
     }
 }

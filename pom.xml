@@ -8,6 +8,17 @@
     <artifactId>flinkx-all</artifactId>
     <packaging>pom</packaging>
     <version>1.6</version>
+    <!--    &lt;!&ndash;发现依赖和扩展的远程仓库列表。 &ndash;&gt;-->
+    <!--    <repositories>-->
+    <!--        <repository>-->
+    <!--            &lt;!&ndash;远程仓库唯一标识符。可以用来匹配在settings.xml文件里配置的远程仓库 &ndash;&gt;-->
+    <!--            <id>nexus-aliyun</id>-->
+    <!--            &lt;!&ndash;远程仓库名称 &ndash;&gt;-->
+    <!--            <name>Nexus aliyun</name>-->
+    <!--            &lt;!&ndash;远程仓库URL，按protocol://hostname/path形式 &ndash;&gt;-->
+    <!--            <url>http://maven.aliyun.com/nexus/content/groups/public</url>-->
+    <!--        </repository>-->
+    <!--    </repositories>-->
 
     <modules>
         <module>flinkx-core</module>
@@ -60,9 +71,9 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <flink.version>1.10.0</flink.version>
+        <flink.version>1.10.1</flink.version>
         <flinkx.version>1.6</flinkx.version>
-        <hadoop.version>2.7.3</hadoop.version>
+        <hadoop.version>2.6.5</hadoop.version>
         <http.version>4.5.3</http.version>
         <dev.path>${basedir}/dev</dev.path>
         <package.name>release_1.10.0</package.name>
