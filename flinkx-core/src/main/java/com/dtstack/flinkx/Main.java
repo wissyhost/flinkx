@@ -56,8 +56,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The main class entry
- *
+ * <p>
  * Company: www.dtstack.com
+ *
  * @author huyifan.zju@163.com
  */
 public class Main {
@@ -80,17 +81,27 @@ public class Main {
         String monitor = options.getMonitor();
         String pluginRoot = options.getPluginRoot();
         String savepointPath = options.getS();
+        String jobArgs = options.getJobArgs();
         Properties confProperties = parseConf(options.getConfProp());
-
+        // 替换配置的参数
+        if (jobArgs != null && !jobArgs.equals("")) {
+            LOG.info("need replace Args:" + jobArgs);
+            for (String tempArgs : jobArgs.split(",")) {
+                String key = tempArgs.split("=")[0];
+                String value = tempArgs.split("=")[1];
+                job = job.replace("${" + key + "}", value);
+            }
+            LOG.debug("replaced Args:" + job);
+        }
         // 解析jobPath指定的任务配置文件
         DataTransferConfig config = DataTransferConfig.parse(job);
         speedTest(config);
 
-        if(StringUtils.isNotEmpty(monitor)) {
+        if (StringUtils.isNotEmpty(monitor)) {
             config.setMonitorUrls(monitor);
         }
 
-        if(StringUtils.isNotEmpty(pluginRoot)) {
+        if (StringUtils.isNotEmpty(pluginRoot)) {
             config.setPluginRoot(pluginRoot);
         }
 
@@ -112,7 +123,7 @@ public class Main {
         env.setRestartStrategy(RestartStrategies.noRestart());
         BaseDataReader dataReader = DataReaderFactory.getDataReader(config, env);
         DataStream<Row> dataStream = dataReader.readData();
-        if(speedConfig.getReaderChannel() > 0){
+        if (speedConfig.getReaderChannel() > 0) {
             dataStream = ((DataStreamSource<Row>) dataStream).setParallelism(speedConfig.getReaderChannel());
         }
 
@@ -122,12 +133,12 @@ public class Main {
 
         BaseDataWriter dataWriter = DataWriterFactory.getDataWriter(config);
         DataStreamSink<?> dataStreamSink = dataWriter.writeData(dataStream);
-        if(speedConfig.getWriterChannel() > 0){
+        if (speedConfig.getWriterChannel() > 0) {
             dataStreamSink.setParallelism(speedConfig.getWriterChannel());
         }
 
-        if(env instanceof MyLocalStreamEnvironment) {
-            if(StringUtils.isNotEmpty(savepointPath)){
+        if (env instanceof MyLocalStreamEnvironment) {
+            if (StringUtils.isNotEmpty(savepointPath)) {
                 ((MyLocalStreamEnvironment) env).setSettings(SavepointRestoreSettings.forPath(savepointPath));
             }
         }
@@ -135,12 +146,12 @@ public class Main {
         addEnvClassPath(env, ClassLoaderManager.getClassPath());
 
         JobExecutionResult result = env.execute(jobIdString);
-        if(env instanceof MyLocalStreamEnvironment){
+        if (env instanceof MyLocalStreamEnvironment) {
             ResultPrintUtil.printResult(result);
         }
     }
 
-    private static void configRestartStrategy(StreamExecutionEnvironment env, DataTransferConfig config){
+    private static void configRestartStrategy(StreamExecutionEnvironment env, DataTransferConfig config) {
         if (needRestart(config)) {
             RestartConfig restartConfig = findRestartConfig(config);
             if (RestartConfig.STRATEGY_FIXED_DELAY.equalsIgnoreCase(restartConfig.getStrategy())) {
@@ -170,18 +181,18 @@ public class Main {
 
         Object restartConfigObj = config.getJob().getContent().get(0).getReader().getParameter().getVal(RestartConfig.KEY_STRATEGY);
         if (null != restartConfigObj) {
-            return new RestartConfig((Map<String, Object>)restartConfigObj);
+            return new RestartConfig((Map<String, Object>) restartConfigObj);
         }
 
         restartConfigObj = config.getJob().getContent().get(0).getWriter().getParameter().getVal(RestartConfig.KEY_STRATEGY);
         if (null != restartConfigObj) {
-            return new RestartConfig((Map<String, Object>)restartConfigObj);
+            return new RestartConfig((Map<String, Object>) restartConfigObj);
         }
 
         return RestartConfig.defaultConfig();
     }
 
-    private static boolean needRestart(DataTransferConfig config){
+    private static boolean needRestart(DataTransferConfig config) {
         return config.getJob().getSetting().getRestoreConfig().isStream();
     }
 
@@ -190,7 +201,7 @@ public class Main {
         if (READER.equalsIgnoreCase(testConfig.getSpeedTest())) {
             ContentConfig contentConfig = config.getJob().getContent().get(0);
             contentConfig.getWriter().setName(STREAM_WRITER);
-        } else if (WRITER.equalsIgnoreCase(testConfig.getSpeedTest())){
+        } else if (WRITER.equalsIgnoreCase(testConfig.getSpeedTest())) {
             ContentConfig contentConfig = config.getJob().getContent().get(0);
             contentConfig.getReader().setName(STREAM_READER);
         }
@@ -198,21 +209,21 @@ public class Main {
         config.getJob().getSetting().getSpeed().setBytes(-1);
     }
 
-    private static void addEnvClassPath(StreamExecutionEnvironment env, Set<URL> classPathSet) throws Exception{
+    private static void addEnvClassPath(StreamExecutionEnvironment env, Set<URL> classPathSet) throws Exception {
         int i = 0;
-        for(URL url : classPathSet){
+        for (URL url : classPathSet) {
             String classFileName = String.format(CLASS_FILE_NAME_FMT, i);
-            env.registerCachedFile(url.getPath(),  classFileName, true);
+            env.registerCachedFile(url.getPath(), classFileName, true);
             i++;
         }
 
-        if(env instanceof MyLocalStreamEnvironment){
+        if (env instanceof MyLocalStreamEnvironment) {
             ((MyLocalStreamEnvironment) env).setClasspaths(new ArrayList<>(classPathSet));
         }
     }
 
-    private static Properties parseConf(String confStr) throws Exception{
-        if(StringUtils.isEmpty(confStr)){
+    private static Properties parseConf(String confStr) throws Exception {
+        if (StringUtils.isEmpty(confStr)) {
             return new Properties();
         }
 
@@ -220,15 +231,15 @@ public class Main {
         return objectMapper.readValue(confStr, Properties.class);
     }
 
-    private static StreamExecutionEnvironment openCheckpointConf(StreamExecutionEnvironment env, Properties properties){
-        if(properties!=null){
+    private static StreamExecutionEnvironment openCheckpointConf(StreamExecutionEnvironment env, Properties properties) {
+        if (properties != null) {
             String interval = properties.getProperty(ConfigConstant.FLINK_CHECKPOINT_INTERVAL_KEY);
-            if(StringUtils.isNotBlank(interval)){
+            if (StringUtils.isNotBlank(interval)) {
                 env.enableCheckpointing(Long.parseLong(interval.trim()));
                 LOG.info("Open checkpoint with interval:" + interval);
             }
             String checkpointTimeoutStr = properties.getProperty(ConfigConstant.FLINK_CHECKPOINT_TIMEOUT_KEY);
-            if(checkpointTimeoutStr != null){
+            if (checkpointTimeoutStr != null) {
                 long checkpointTimeout = Long.parseLong(checkpointTimeoutStr.trim());
                 //checkpoints have to complete within one min,or are discard
                 env.getCheckpointConfig().setCheckpointTimeout(checkpointTimeout);
